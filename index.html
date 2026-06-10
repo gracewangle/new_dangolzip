@@ -651,6 +651,12 @@
     .admin-order-table .input{min-height:40px;border-radius:10px;padding:0 10px}
     .admin-order-table .input.order-status-changed{border-color:#f97316;box-shadow:0 0 0 3px rgba(249,115,22,.12)}
     .admin-order-table .btn{min-height:40px;border-radius:10px;padding:0 12px}
+    .admin-order-total{
+      color:#e11d48;
+      font-size:15px;
+      font-weight:800;
+      white-space:nowrap;
+    }
     .admin-order-save-cell{display:grid;gap:6px;min-width:82px}
     .admin-order-card{
       border:1px solid var(--border);
@@ -2477,7 +2483,6 @@
     }
 
     function renderAdminOrderDetailBlock(order){
-      const settlement = orderSettlement(order);
       return `
         <details class="admin-order-detail">
           <summary>상세</summary>
@@ -2490,14 +2495,6 @@
             ${order.orderMemo ? `<strong>요청사항</strong><span>${escapeHtml(order.orderMemo)}</span>` : ""}
             <strong>결제정보</strong>
             <span>${paymentMethodLabel(order.paymentMethod)} · ${escapeHtml(orderPayerName(order) || "-")}</span>
-            <strong>정산 정보</strong>
-            <span>판매금액 ${formatPrice(settlement.saleAmount)}</span>
-            <span>공급가 합계 ${formatPrice(settlement.supplyAmount)}</span>
-            <span>총마진 ${formatPrice(settlement.grossMargin)}</span>
-            <span>큐레이터 수수료율 ${Number(settlement.curatorCommissionRate || 0)}%</span>
-            <span>큐레이터 정산금 ${formatPrice(settlement.curatorCommission)}</span>
-            <span>로컬비 수익 ${formatPrice(settlement.localbeeProfit)}</span>
-            <span>유입 ref ${escapeHtml(orderRef(order))}</span>
             <button class="btn danger block" type="button" data-delete-order="${escapeHtml(order.id || "")}">주문삭제</button>
           </div>
         </details>
@@ -2876,14 +2873,12 @@
                     <th><input id="adminOrderSelectAll" type="checkbox" aria-label="전체 주문 선택"></th>
                     <th>주문일시</th>
                     <th>주문번호</th>
+                    <th>닉네임</th>
                     <th>상태</th>
                     <th>상품명</th>
                     <th>선택상품</th>
                     <th>수량</th>
                     <th>총금액</th>
-                    <th>정산금</th>
-                    <th>로컬비 수익</th>
-                    <th>닉네임</th>
                     <th>연락처</th>
                     <th>주소</th>
                     <th>결제수단</th>
@@ -2910,12 +2905,12 @@
       const status = order.status || "ordered";
       const fullAddress = orderFullAddress(order);
       const ref = orderRef(order);
-      const settlement = orderSettlement(order);
       return `
         <tr data-admin-order-scope data-order-row="${escapeHtml(order.id || "")}" class="${pendingOrderStatusChanges[order.id] ? "order-row-changed" : ""}">
           <td><input type="checkbox" data-order-checkbox="${escapeHtml(order.id || "")}" aria-label="${escapeHtml(order.id || "주문")} 선택" ${selectedAdminOrderIds[order.id] ? "checked" : ""}></td>
           <td>${formatDateTime(order.createdAt)}</td>
           <td><div class="admin-order-id">${escapeHtml(order.id || "")}</div></td>
+          <td>${escapeHtml(order.buyerNickname || order.buyerName || "")}</td>
           <td><strong data-order-current-status="${escapeHtml(order.id || "")}">${orderStatusLabel(status)}</strong></td>
           <td><div class="admin-order-product">${escapeHtml(order.productTitle || "")}</div></td>
           <td>
@@ -2925,10 +2920,7 @@
             </div>
           </td>
           <td><strong>${Number(order.quantity || 0)}개</strong></td>
-          <td><strong class="price">${formatPrice(order.totalPrice)}</strong></td>
-          <td><strong>${formatPrice(settlement.curatorCommission)}</strong></td>
-          <td><strong>${formatPrice(settlement.localbeeProfit)}</strong></td>
-          <td>${escapeHtml(order.buyerNickname || order.buyerName || "")}</td>
+          <td><strong class="admin-order-total">${formatPrice(order.totalPrice)}</strong></td>
           <td>${escapeHtml(order.buyerPhone || "")}</td>
           <td><div class="admin-order-address" title="${escapeHtml(fullAddress)}">${escapeHtml(fullAddress || "-")}</div></td>
           <td>${paymentMethodLabel(order.paymentMethod)}</td>
