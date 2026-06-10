@@ -289,6 +289,31 @@
     .curator-code-cell .input{min-height:38px;border-radius:10px;font-size:12px}
     .curator-actions{display:flex;gap:6px;flex-wrap:wrap}
     .curator-actions .btn{min-height:34px;border-radius:10px;padding:0 10px;font-size:12px}
+    .curator-product-links{
+      margin-top:8px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#f8fafc;
+      padding:8px;
+    }
+    .curator-product-links summary{
+      list-style:none;
+      cursor:pointer;
+      font-weight:950;
+      color:#2563eb;
+    }
+    .curator-product-links summary::-webkit-details-marker{display:none}
+    .curator-product-link-list{display:grid;gap:8px;margin-top:8px}
+    .curator-product-link-row{
+      display:grid;
+      gap:6px;
+      border:1px solid var(--border);
+      border-radius:10px;
+      background:#fff;
+      padding:8px;
+    }
+    .curator-product-link-row strong{font-size:13px}
+    .curator-product-link-row .input{width:100%;min-height:34px;font-size:11px}
     .dashboard-activity{display:grid;gap:8px}
     .dashboard-activity li{
       list-style:none;
@@ -519,6 +544,37 @@
       font-weight:900;
     }
     .order-filter-btn.active{border-color:var(--primary);background:#ecfdf3;color:#047a3a}
+    .bulk-order-actions{
+      display:grid;
+      gap:10px;
+      border:1px solid #fde68a;
+      border-radius:16px;
+      background:#fffbeb;
+      padding:12px;
+    }
+    .bulk-order-actions-row{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .bulk-order-actions .input{max-width:220px}
+    .selected-order-count{
+      font-weight:950;
+      color:#92400e;
+    }
+    .changed-badge{
+      display:inline-flex;
+      align-items:center;
+      min-height:24px;
+      border-radius:999px;
+      background:#fef3c7;
+      color:#92400e;
+      padding:0 8px;
+      font-size:12px;
+      font-weight:950;
+      margin-top:4px;
+    }
     .admin-order-list{display:grid;gap:14px}
     .admin-order-table-wrap{display:none}
     .admin-order-card-list{display:grid;gap:14px}
@@ -553,6 +609,8 @@
       white-space:nowrap;
     }
     .admin-order-table tbody tr:hover{background:#f9fafb}
+    .admin-order-table tbody tr.order-row-changed{background:#fff7ed}
+    .admin-order-table tbody tr.order-row-changed:hover{background:#ffedd5}
     .admin-order-table tbody tr:last-child td{border-bottom:0}
     .admin-order-id{max-width:120px;word-break:break-all;font-weight:900}
     .admin-order-product{max-width:150px;font-weight:900}
@@ -590,6 +648,7 @@
     }
     .admin-order-detail-body .btn{min-height:38px}
     .admin-order-table .input{min-height:40px;border-radius:10px;padding:0 10px}
+    .admin-order-table .input.order-status-changed{border-color:#f97316;box-shadow:0 0 0 3px rgba(249,115,22,.12)}
     .admin-order-table .btn{min-height:40px;border-radius:10px;padding:0 12px}
     .admin-order-save-cell{display:grid;gap:6px;min-width:82px}
     .admin-order-card{
@@ -601,6 +660,7 @@
       display:grid;
       gap:14px;
     }
+    .admin-order-card.order-row-changed{border-color:#fdba74;background:#fff7ed}
     .admin-order-head{display:grid;gap:10px}
     .admin-order-title{display:grid;gap:4px}
     .admin-order-title strong{font-size:18px;word-break:break-all}
@@ -1071,17 +1131,27 @@
       line-height:1.55;
     }
     .current-ref-badge{
-      display:inline-flex;
+      display:flex;
       align-items:center;
+      gap:8px;
       min-height:32px;
       border:1px solid #bbf7d0;
-      border-radius:999px;
+      border-radius:14px;
       background:#f0fdf4;
       color:#047857;
-      padding:0 12px;
+      padding:9px 12px;
       font-size:13px;
       font-weight:950;
       margin-bottom:10px;
+    }
+    .current-ref-badge::before{
+      content:"";
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:var(--primary);
+      box-shadow:0 0 0 4px rgba(3,199,90,.12);
+      flex:0 0 auto;
     }
     .payer-highlight{
       border:1px solid #facc15;
@@ -1268,6 +1338,8 @@
     let adminOrderSearch = "";
     let adminOrderStartDate = "";
     let adminOrderEndDate = "";
+    let selectedAdminOrderIds = {};
+    let pendingOrderStatusChanges = {};
     const ORDER_STATUS_OPTIONS = [
       ["ordered", "주문접수"],
       ["paid", "입금확인"],
@@ -1401,7 +1473,10 @@
 
     function renderCurrentRefBadge(){
       const ref = currentRef();
-      const label = ref && ref !== "direct" ? `큐레이터 코드: ${ref}` : "직접 접속";
+      const curator = getCurators().find(function(item){ return item.id === ref; });
+      const label = ref && ref !== "direct"
+        ? (curator?.name ? `${curator.name}님 추천 링크로 접속 중` : "추천 링크로 접속 중")
+        : "직접 접속";
       return `<div class="current-ref-badge" aria-label="현재 유입 정보">${escapeHtml(label)}</div>`;
     }
 
@@ -1831,6 +1906,7 @@
       }
 
       app.innerHTML = `
+        ${renderCurrentRefBadge()}
         <section class="hero">
           <div>
             <h1>${escapeHtml(product.title)}</h1>
@@ -2375,12 +2451,15 @@
 
     function renderOrderStatusSelect(order){
       const status = order.status || "ordered";
+      const pendingStatus = pendingOrderStatusChanges[order.id] || status;
+      const changed = pendingStatus !== status;
       return `
-        <select class="input" data-order-status="${escapeHtml(order.id || "")}" aria-label="주문상태 변경">
+        <select class="input ${changed ? "order-status-changed" : ""}" data-order-status="${escapeHtml(order.id || "")}" aria-label="주문상태 변경">
           ${ORDER_STATUS_OPTIONS.map(function(option){
-            return `<option value="${option[0]}" ${status === option[0] ? "selected" : ""}>${option[1]}</option>`;
+            return `<option value="${option[0]}" ${pendingStatus === option[0] ? "selected" : ""}>${option[1]}</option>`;
           }).join("")}
         </select>
+        ${changed ? `<span class="changed-badge">변경됨</span>` : ""}
       `;
     }
 
@@ -2605,6 +2684,18 @@
             ${renderOrderFilterButton("all", "전체")}
             ${ORDER_STATUS_OPTIONS.map(function(option){ return renderOrderFilterButton(option[0], option[1]); }).join("")}
           </div>
+          <div class="bulk-order-actions" aria-label="선택 주문 일괄 처리">
+            <div class="selected-order-count" id="selectedOrderCount">선택된 주문 0건</div>
+            <div class="bulk-order-actions-row">
+              <select class="input" id="bulkOrderStatus" aria-label="일괄 변경 상태">
+                ${ORDER_STATUS_OPTIONS.map(function(option){
+                  return `<option value="${option[0]}">${option[1]}</option>`;
+                }).join("")}
+              </select>
+              <button class="btn" type="button" data-action="bulk-change-order-status">선택 주문 상태변경</button>
+              <button class="btn primary" type="button" data-action="save-selected-order-status">선택 주문 저장</button>
+            </div>
+          </div>
         </section>
 
         <section class="period-summary" id="orderPeriodSummary"></section>
@@ -2735,9 +2826,43 @@
       };
     }
 
+    function selectedAdminOrderCount(){
+      return selectedVisibleAdminOrderIds().length;
+    }
+
+    function selectedVisibleAdminOrderIds(){
+      const visibleIds = new Set(filteredAdminOrders().map(function(order){ return order.id; }));
+      return Object.keys(selectedAdminOrderIds).filter(function(orderId){
+        return selectedAdminOrderIds[orderId] && visibleIds.has(orderId);
+      });
+    }
+
+    function updateSelectedOrderCount(){
+      const countEl = document.getElementById("selectedOrderCount");
+      if(countEl) countEl.textContent = `선택된 주문 ${selectedAdminOrderCount()}건`;
+      const visibleOrders = filteredAdminOrders();
+      const checkedCount = visibleOrders.filter(function(order){ return selectedAdminOrderIds[order.id]; }).length;
+      const allCheckbox = document.getElementById("adminOrderSelectAll");
+      if(allCheckbox){
+        allCheckbox.checked = visibleOrders.length > 0 && checkedCount === visibleOrders.length;
+        allCheckbox.indeterminate = checkedCount > 0 && checkedCount < visibleOrders.length;
+      }
+    }
+
+    function clearOrderSelectionForMissingOrders(){
+      const orderIds = new Set(readJson(STORAGE_KEYS.orders, []).map(function(order){ return order.id; }));
+      Object.keys(selectedAdminOrderIds).forEach(function(orderId){
+        if(!orderIds.has(orderId)) delete selectedAdminOrderIds[orderId];
+      });
+      Object.keys(pendingOrderStatusChanges).forEach(function(orderId){
+        if(!orderIds.has(orderId)) delete pendingOrderStatusChanges[orderId];
+      });
+    }
+
     function updateAdminOrderList(){
       const list = document.getElementById("adminOrderList");
       if(!list) return;
+      clearOrderSelectionForMissingOrders();
       const orders = filteredAdminOrders();
       const hasOrders = sortedOrders().length > 0;
       list.innerHTML = orders.length
@@ -2747,7 +2872,7 @@
               <table class="admin-order-table">
                 <thead>
                   <tr>
-                    <th><input type="checkbox" aria-label="전체 주문 선택"></th>
+                    <th><input id="adminOrderSelectAll" type="checkbox" aria-label="전체 주문 선택"></th>
                     <th>주문일시</th>
                     <th>주문번호</th>
                     <th>상태</th>
@@ -2763,7 +2888,6 @@
                     <th>결제수단</th>
                     <th>유입</th>
                     <th>상태변경</th>
-                    <th>저장</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2778,6 +2902,7 @@
         `
         : `<div class="empty"><div><strong>${hasOrders ? "조건에 맞는 주문이 없습니다." : "아직 접수된 주문이 없습니다."}</strong><p>${hasOrders ? "필터나 검색어를 조정해주세요." : "주문이 접수되면 이곳에 최신순으로 표시됩니다."}</p></div></div>`;
       updateOrderPeriodPanels();
+      updateSelectedOrderCount();
     }
 
     function renderAdminOrderTableRow(order){
@@ -2786,8 +2911,8 @@
       const ref = orderRef(order);
       const settlement = orderSettlement(order);
       return `
-        <tr data-admin-order-scope>
-          <td><input type="checkbox" aria-label="${escapeHtml(order.id || "주문")} 선택"></td>
+        <tr data-admin-order-scope data-order-row="${escapeHtml(order.id || "")}" class="${pendingOrderStatusChanges[order.id] ? "order-row-changed" : ""}">
+          <td><input type="checkbox" data-order-checkbox="${escapeHtml(order.id || "")}" aria-label="${escapeHtml(order.id || "주문")} 선택" ${selectedAdminOrderIds[order.id] ? "checked" : ""}></td>
           <td>${formatDateTime(order.createdAt)}</td>
           <td><div class="admin-order-id">${escapeHtml(order.id || "")}</div></td>
           <td><strong data-order-current-status="${escapeHtml(order.id || "")}">${orderStatusLabel(status)}</strong></td>
@@ -2808,12 +2933,6 @@
           <td>${paymentMethodLabel(order.paymentMethod)}</td>
           <td><strong>${escapeHtml(orderRefLabel(order))}</strong>${ref !== "direct" ? `<br><small>${escapeHtml(ref)}</small>` : ""}</td>
           <td>${renderOrderStatusSelect(order)}</td>
-          <td>
-            <div class="admin-order-save-cell">
-              <button class="btn primary block" type="button" data-save-order-status="${escapeHtml(order.id || "")}">저장</button>
-              <div class="order-status-save-message" data-order-status-message="${escapeHtml(order.id || "")}"></div>
-            </div>
-          </td>
         </tr>
       `;
     }
@@ -2822,9 +2941,13 @@
       const status = order.status || "ordered";
       const settlement = orderSettlement(order);
       return `
-        <article class="admin-order-card" data-admin-order-scope>
+        <article class="admin-order-card ${pendingOrderStatusChanges[order.id] ? "order-row-changed" : ""}" data-admin-order-scope data-order-row="${escapeHtml(order.id || "")}">
           <div class="admin-order-head">
             <div class="admin-order-title">
+              <label class="field">
+                <span>선택</span>
+                <input type="checkbox" data-order-checkbox="${escapeHtml(order.id || "")}" ${selectedAdminOrderIds[order.id] ? "checked" : ""}>
+              </label>
               <strong>${escapeHtml(order.id || "")}</strong>
               <span>${formatDateTime(order.createdAt)}</span>
             </div>
@@ -2833,7 +2956,6 @@
                 <span>주문상태</span>
                 ${renderOrderStatusSelect(order)}
               </label>
-              <button class="btn primary block" type="button" data-save-order-status="${escapeHtml(order.id || "")}">저장</button>
               <div class="order-status-save-message" data-order-status-message="${escapeHtml(order.id || "")}"></div>
             </div>
           </div>
@@ -2900,10 +3022,11 @@
       return STOCK_DEDUCTED_STATUSES.includes(status);
     }
 
-    function updateOrderStatus(orderId, status){
+    function updateOrderStatus(orderId, status, options){
+      const settings = options || {};
       const orders = readJson(STORAGE_KEYS.orders, []);
       const order = orders.find(function(item){ return item.id === orderId; });
-      if(!order) return;
+      if(!order) return false;
       const oldStatus = order.status || "ordered";
       const newStatus = status || "ordered";
       const wasStockDeductedStatus = isStockDeductedStatus(oldStatus);
@@ -2918,12 +3041,12 @@
       }
       order.status = status;
       saveOrders(orders);
-      if(route() === "admin/orders"){
+      if(route() === "admin/orders" && !settings.skipRender){
         renderAdminOrders();
         document.querySelectorAll(`[data-order-status-message="${orderId}"]`).forEach(function(message){
           message.textContent = "저장됨";
         });
-        return;
+        return true;
       }
       document.querySelectorAll(`[data-order-current-status="${orderId}"]`).forEach(function(label){
         label.textContent = orderStatusLabel(status);
@@ -2931,12 +3054,60 @@
       document.querySelectorAll(`[data-order-status-message="${orderId}"]`).forEach(function(message){
         message.textContent = "저장됨";
       });
+      return true;
+    }
+
+    function markOrderStatusChanged(orderId, status){
+      const order = readJson(STORAGE_KEYS.orders, []).find(function(item){ return item.id === orderId; });
+      if(!order) return;
+      const currentStatus = order.status || "ordered";
+      if(status && status !== currentStatus) pendingOrderStatusChanges[orderId] = status;
+      else delete pendingOrderStatusChanges[orderId];
+      updateAdminOrderList();
+    }
+
+    function applyBulkOrderStatusChange(){
+      const selectedIds = selectedVisibleAdminOrderIds();
+      const status = document.getElementById("bulkOrderStatus")?.value || "";
+      if(!selectedIds.length || !status){
+        showToast("상태를 변경할 주문을 선택해주세요.");
+        return;
+      }
+      selectedIds.forEach(function(orderId){
+        const order = readJson(STORAGE_KEYS.orders, []).find(function(item){ return item.id === orderId; });
+        if(order && status !== (order.status || "ordered")) pendingOrderStatusChanges[orderId] = status;
+        else delete pendingOrderStatusChanges[orderId];
+      });
+      updateAdminOrderList();
+      showToast("선택 주문 상태가 화면에 반영되었습니다.");
+    }
+
+    function saveSelectedOrderStatusChanges(){
+      const selectedIds = selectedVisibleAdminOrderIds();
+      const changedIds = selectedIds.filter(function(orderId){ return Boolean(pendingOrderStatusChanges[orderId]); });
+      if(!selectedIds.length){
+        showToast("저장할 주문을 선택해주세요.");
+        return;
+      }
+      if(!changedIds.length){
+        showToast("변경된 주문 상태가 없습니다.");
+        return;
+      }
+      changedIds.forEach(function(orderId){
+        updateOrderStatus(orderId, pendingOrderStatusChanges[orderId], {skipRender:true});
+        delete pendingOrderStatusChanges[orderId];
+      });
+      selectedAdminOrderIds = {};
+      renderAdminOrders();
+      showToast("선택한 주문 상태가 저장되었습니다.");
     }
 
     function deleteOrder(orderId){
       if(!confirm("이 주문을 삭제하시겠습니까?")) return;
       const orders = readJson(STORAGE_KEYS.orders, []).filter(function(order){ return order.id !== orderId; });
       saveOrders(orders);
+      delete selectedAdminOrderIds[orderId];
+      delete pendingOrderStatusChanges[orderId];
       renderAdminOrders();
       showToast("주문을 삭제했습니다.");
     }
@@ -3268,6 +3439,51 @@
       return base + "?ref=" + encodeURIComponent(ref) + "#home";
     }
 
+    function curatorProductLink(ref, productId){
+      const base = location.href.split("#")[0].split("?")[0];
+      return base + "?ref=" + encodeURIComponent(ref) + "&productId=" + encodeURIComponent(productId);
+    }
+
+    function getProductIdFromUrl(){
+      const searchParams = new URLSearchParams(location.search || "");
+      let productId = searchParams.get("productId");
+      if(!productId && location.hash.includes("?")){
+        const hashQuery = location.hash.split("?")[1] || "";
+        productId = new URLSearchParams(hashQuery).get("productId");
+      }
+      return (productId || "").trim();
+    }
+
+    function routeProductFromUrl(){
+      const productId = getProductIdFromUrl();
+      if(productId && !route().startsWith("product/")){
+        history.replaceState(null, "", location.href.split("#")[0] + "#product/" + encodeURIComponent(productId));
+      }
+    }
+
+    function renderCuratorProductLinks(ref){
+      const sellingProducts = getProducts().filter(function(product){
+        return product && product.status === "selling";
+      });
+      return `
+        <details class="curator-product-links">
+          <summary>상품별 URL 복사</summary>
+          <div class="curator-product-link-list">
+            ${sellingProducts.length ? sellingProducts.map(function(product){
+              const link = curatorProductLink(ref, product.id);
+              return `
+                <div class="curator-product-link-row">
+                  <strong>${escapeHtml(product.title || "")}</strong>
+                  <input class="input" type="text" value="${escapeHtml(link)}" readonly>
+                  <button class="btn primary" type="button" data-copy-curator-product-link="${escapeHtml(ref)}" data-product-id="${escapeHtml(product.id)}">복사</button>
+                </div>
+              `;
+            }).join("") : `<div class="empty"><strong>판매중 상품이 없습니다.</strong></div>`}
+          </div>
+        </details>
+      `;
+    }
+
     function curatorStats(ref){
       const visits = readJson(STORAGE_KEYS.visitLogs, []).filter(function(log){
         return (log.ref || "direct") === ref;
@@ -3399,6 +3615,7 @@
                           <button class="btn" type="button" data-edit-curator="${escapeHtml(curator.id)}">수정</button>
                           <button class="btn danger" type="button" data-delete-curator="${escapeHtml(curator.id)}">삭제</button>
                         </div>
+                        ${renderCuratorProductLinks(curator.id)}
                       </div>
                     </td>
                     <td>${escapeHtml(curator.name || "")}</td>
@@ -3447,6 +3664,7 @@
             <button class="btn" type="button" data-edit-curator="${escapeHtml(curator.id)}">수정</button>
             <button class="btn danger" type="button" data-delete-curator="${escapeHtml(curator.id)}">삭제</button>
           </div>
+          ${renderCuratorProductLinks(curator.id)}
         </article>
       `;
     }
@@ -3999,19 +4217,20 @@
       showToast(editId ? "큐레이터 정보가 저장되었습니다." : "큐레이터가 등록되었습니다.");
     }
 
-    function copyText(text){
+    function copyText(text, message){
+      const toastMessage = message || "링크가 복사되었습니다.";
       if(navigator.clipboard && navigator.clipboard.writeText){
         navigator.clipboard.writeText(text).then(function(){
-          showToast("링크가 복사되었습니다.");
+          showToast(toastMessage);
         }).catch(function(){
-          fallbackCopyText(text);
+          fallbackCopyText(text, toastMessage);
         });
         return;
       }
-      fallbackCopyText(text);
+      fallbackCopyText(text, toastMessage);
     }
 
-    function fallbackCopyText(text){
+    function fallbackCopyText(text, message){
       const input = document.createElement("textarea");
       input.value = text;
       input.setAttribute("readonly", "");
@@ -4021,7 +4240,7 @@
       input.select();
       document.execCommand("copy");
       input.remove();
-      showToast("링크가 복사되었습니다.");
+      showToast(message || "링크가 복사되었습니다.");
     }
 
     function renderAdminSection(type){
@@ -4139,9 +4358,28 @@
       }
       const orderStatusSelect = event.target.closest("[data-order-status]");
       if(orderStatusSelect){
-        document.querySelectorAll(`[data-order-status-message="${orderStatusSelect.dataset.orderStatus}"]`).forEach(function(message){
-          message.textContent = "";
+        markOrderStatusChanged(orderStatusSelect.dataset.orderStatus, orderStatusSelect.value);
+        return;
+      }
+      if(event.target.id === "adminOrderSelectAll"){
+        const checked = event.target.checked;
+        filteredAdminOrders().forEach(function(order){
+          if(order.id) selectedAdminOrderIds[order.id] = checked;
         });
+        if(!checked){
+          filteredAdminOrders().forEach(function(order){
+            delete selectedAdminOrderIds[order.id];
+          });
+        }
+        updateAdminOrderList();
+        return;
+      }
+      const orderCheckbox = event.target.closest("[data-order-checkbox]");
+      if(orderCheckbox){
+        const orderId = orderCheckbox.dataset.orderCheckbox;
+        if(orderCheckbox.checked) selectedAdminOrderIds[orderId] = true;
+        else delete selectedAdminOrderIds[orderId];
+        updateSelectedOrderCount();
       }
     });
 
@@ -4215,6 +4453,15 @@
       const copyCuratorButton = event.target.closest("[data-copy-curator-link]");
       if(copyCuratorButton){
         copyText(curatorLink(copyCuratorButton.dataset.copyCuratorLink));
+        return;
+      }
+
+      const copyCuratorProductButton = event.target.closest("[data-copy-curator-product-link]");
+      if(copyCuratorProductButton){
+        copyText(
+          curatorProductLink(copyCuratorProductButton.dataset.copyCuratorProductLink, copyCuratorProductButton.dataset.productId),
+          "상품 링크가 복사되었습니다."
+        );
         return;
       }
 
@@ -4374,6 +4621,14 @@
         renderAdminOrders();
         return;
       }
+      if(action === "bulk-change-order-status"){
+        applyBulkOrderStatusChange();
+        return;
+      }
+      if(action === "save-selected-order-status"){
+        saveSelectedOrderStatusChanges();
+        return;
+      }
       if(action === "admin-back"){
         goAdminBack();
         return;
@@ -4413,6 +4668,7 @@
     window.addEventListener("hashchange", render);
 
     captureRefFromUrl();
+    routeProductFromUrl();
     if(!location.hash){
       history.replaceState(null, "", "#home");
     }
