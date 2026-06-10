@@ -1070,6 +1070,45 @@
       font-weight:800;
       line-height:1.55;
     }
+    .current-ref-badge{
+      display:inline-flex;
+      align-items:center;
+      min-height:32px;
+      border:1px solid #bbf7d0;
+      border-radius:999px;
+      background:#f0fdf4;
+      color:#047857;
+      padding:0 12px;
+      font-size:13px;
+      font-weight:950;
+      margin-bottom:10px;
+    }
+    .payer-highlight{
+      border:1px solid #facc15;
+      border-radius:16px;
+      background:#fffbeb;
+      padding:12px;
+      display:grid;
+      gap:8px;
+    }
+    .payer-highlight .field span{
+      font-weight:950;
+      color:#111827;
+    }
+    .payer-highlight .field span::after{
+      content:"";
+    }
+    .payer-highlight .input{
+      border-color:#f59e0b;
+      background:#fff;
+      box-shadow:0 0 0 3px rgba(245,158,11,.12);
+    }
+    .payer-help{
+      color:#92400e;
+      font-size:13px;
+      font-weight:900;
+      line-height:1.45;
+    }
     .payment-qr-placeholder{
       min-height:180px;
       border:1px dashed #bfdbfe;
@@ -1346,7 +1385,8 @@
         localStorage.setItem(CURRENT_REF_KEY, ref);
         return ref;
       }
-      return localStorage.getItem(CURRENT_REF_KEY) || "direct";
+      localStorage.setItem(CURRENT_REF_KEY, "direct");
+      return "direct";
     }
 
     function captureRefFromUrl(){
@@ -1357,6 +1397,12 @@
 
     function currentRef(){
       return getRefFromUrl();
+    }
+
+    function renderCurrentRefBadge(){
+      const ref = currentRef();
+      const label = ref && ref !== "direct" ? `큐레이터 코드: ${ref}` : "직접 접속";
+      return `<div class="current-ref-badge" aria-label="현재 유입 정보">${escapeHtml(label)}</div>`;
     }
 
     function logVisit(route){
@@ -1481,6 +1527,7 @@
         </section>
 
         <section id="products">
+          ${renderCurrentRefBadge()}
           <div class="section-head">
             <div>
               <h2>공동구매 상품</h2>
@@ -1561,6 +1608,11 @@
       const nextQuantity = Math.max(0, Number(quantity || 0));
       if(nextQuantity > 0) homeQuickQuantities[key] = nextQuantity;
       else delete homeQuickQuantities[key];
+    }
+
+    function resetBuyerSelections(){
+      homeQuickQuantities = {};
+      homeQuickOrderDraft = null;
     }
 
     function renderHomeExtraOption(product, option){
@@ -1972,10 +2024,13 @@
                   <strong>킷트킷트</strong>
                 </div>
               </div>
-              <label class="field">
-                <span>입금자명 *</span>
-                <input class="input" id="depositorName" type="text">
-              </label>
+              <div class="payer-highlight">
+                <label class="field">
+                  <span>입금자명 <b style="color:#dc2626">*</b></span>
+                  <input class="input" id="depositorName" type="text">
+                </label>
+                <div class="payer-help">입금 확인을 위해 반드시 실제 입금자명을 입력해주세요.</div>
+              </div>
               <div class="payment-notice">
                 결제 후 카톡방에<br>
                 입금 내역 또는 승인번호 6자리 남겨주시면<br>
@@ -1999,10 +2054,13 @@
               <div class="payment-qr-placeholder">
                 서울페이 QR 이미지를 등록해주세요
               </div>
-              <label class="field">
-                <span>결제자명(확인용) *</span>
-                <input class="input" id="payerName" type="text">
-              </label>
+              <div class="payer-highlight">
+                <label class="field">
+                  <span>결제자명 <b style="color:#dc2626">*</b></span>
+                  <input class="input" id="payerName" type="text">
+                </label>
+                <div class="payer-help">결제 확인을 위해 카톡방에 남길 이름과 동일하게 입력해주세요.</div>
+              </div>
             </div>
           </div>
 
@@ -2175,6 +2233,7 @@
       }else{
         localStorage.removeItem(BUYER_INFO_KEY);
       }
+      resetBuyerSelections();
       go("order/" + order.id);
     }
 
@@ -3936,8 +3995,8 @@
         curators.push(curator);
       }
       saveCurators(curators);
+      renderAdminCurators();
       showToast(editId ? "큐레이터 정보가 저장되었습니다." : "큐레이터가 등록되었습니다.");
-      go("admin/curators");
     }
 
     function copyText(text){
@@ -4330,7 +4389,10 @@
       }
       if(action === "admin-home") go("admin");
       if(action === "admin-products") go("admin/products");
-      if(action === "home") go("home");
+      if(action === "home"){
+        if(route().startsWith("order/")) resetBuyerSelections();
+        go("home");
+      }
       if(action === "add-option"){
         const optionList = document.getElementById("optionList");
         if(optionList) optionList.insertAdjacentHTML("beforeend", renderOptionRow());
